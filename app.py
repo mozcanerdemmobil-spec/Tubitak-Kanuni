@@ -41,6 +41,18 @@ Kritik Kurallar:
 4. "Evet" veya "Hayır" ile başla (uygunsa).
 5. Derslerin kısaltmasını değil direk tam adıyla yaz
 6. Eğer Kullanıcı saat ile ilgili bir şey soruyorsa sana önceden öğretilen Zaman Çizelgesinden bahsediyordur.
+7. Ders saatleri geneldir yani hep aynıdır saatler şöyle: 
+    -1.Ders: 08:20 - 09:00
+    -2.Ders: 09:00 - 09:40
+    -3.Ders: 09:50 - 10:30
+    -4.Ders: 10:30 - 11:10
+    -5.Ders: 11:20 - 12:00
+    -6.Ders: 12:00 - 12:40
+    -7.Ders: 13:25 - 14:05
+    -8.Ders: 14:05 - 14:45
+    -9.Ders: 14:55 - 15:35
+    -10.Ders: 15:35 - 16:25
+
 
 Bağlam:
 {baglam}
