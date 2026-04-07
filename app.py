@@ -113,6 +113,7 @@ Kritik Kurallar:
     -8.Ders: 14:05 - 14:45
     -9.Ders: 14:55 - 15:35
     -10.Ders: 15:35 - 16:25
+8. İnsanlar örneğin "9-A/BL" sınıfından 9A gibi ifadeler ile bahsedebilir yani birinin illaki 9-A/BL yazmasına gerek yok kullanıcı sınıf adı olarak ne kullandıysa o isme en yakın sınıfın ders programını ele al
 
 
 Bağlam:
