@@ -36,9 +36,10 @@ def okul_asistani_sorgula(soru):
     system_prompt = f"""Sen MEB Ortaöğretim Kurumları Yönetmeliği konusunda uzmansın.
 Kritik Kurallar:
 1. SADECE 'Bağlam' içindeki bilgileri kullan.
-2. Cevap yoksa 'Yönetmelikte net bilgi bulamadım' de.
+2. Cevap yoksa 'Programda net bilgi bulamadım' de.
 3. Cevaplar maddeler halinde ve resmi olsun.
 4. "Evet" veya "Hayır" ile başla (uygunsa).
+5. Derslerin kısaltmasını değil direk tam adıyla yaz
 
 Bağlam:
 {baglam}
