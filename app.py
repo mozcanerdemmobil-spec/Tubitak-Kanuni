@@ -1,95 +1,83 @@
 import streamlit as st
-import os
 from groq import Groq
 from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
-# 1. Sayfa Ayarları ve Görselleştirme
-st.set_page_config(page_title="OkulArkadaşım - TÜBİTAK AI", page_icon="🎓")
-st.title("🎓 OkulArkadaşım")
-st.markdown("### MEB Yönetmelik Akıllı Bilgi Asistanı")
+# --- 1. SAYFA AYARLARI ---
+st.set_page_config(page_title="MEB Asistanı", page_icon="🎓", layout="wide")
+st.title("🎓 MEB Ortaöğretim Yönetmelik Asistanı")
 
-# 2. API Anahtarını Streamlit Secrets'tan Çekme
-# Secrets panelinde GROQ_API_KEY olarak tanımladığın için buradan okuyoruz
-try:
-    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-    client = Groq(api_key=GROQ_API_KEY)
-except Exception as e:
-    st.error("⚠️ API Key bulunamadı! Lütfen Streamlit Secrets ayarlarını kontrol edin.")
-    st.stop()
+# --- 2. VERİ YÜKLEME ---
 
-# 3. Veri Tabanını (ChromaDB) ve Embeddings'i Yükleme
-@st.cache_resource # Uygulama her yenilendiğinde DB'yi tekrar yükleyip yavaşlamasın
+@st.cache_resource
 def load_vector_db():
-    # Colab'da kullandığın modelin aynısını kullanmalısın
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    
-    # İndirdiğin 'okul_asistani_db' klasörünün app.py ile aynı yerde olması gerekir
-    persist_dir = "./okul_asistani_db"
-    
-    if not os.path.exists(persist_dir):
-        st.error(f"❌ '{persist_dir}' klasörü bulunamadı. Lütfen GitHub'a yüklediğinizden emin olun.")
-        return None
-        
-    db = Chroma(persist_directory=persist_dir, embedding_function=embeddings)
-    return db
+    vector_db = Chroma(persist_directory="./okul_asistani_db", embedding_function=embeddings)
+    return vector_db
 
+# --- 3. SIDEBAR ---
+with st.sidebar:
+    st.header("⚙️ Ayarlar")
+    api_key = st.text_input("Groq API Key", type="password").strip()
+
+    if not api_key:
+        st.warning("Lütfen devam etmek için API Key giriniz.")
+        st.stop()
+
+# Nesneleri başlat
+client = Groq(api_key=api_key)
 vector_db = load_vector_db()
 
-# 4. Asistan Sorgu Fonksiyonu (Senin paylaştığın mantıkla güncellendi)
+# --- 4. SORGULAMA ---
 def okul_asistani_sorgula(soru):
-    if vector_db is None:
-        return "Veri tabanı yüklenemedi."
-
-    # Benzerlik araması (k=6 odaklanmış sonuç için ideal)
-    docs = vector_db.similarity_search(soru, k=6)
+    docs = vector_db.similarity_search(soru, k=5)
     baglam = "\n\n".join([doc.page_content for doc in docs])
 
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {
-                "role": "system", 
-                "content": """Sen MEB Ortaöğretim Kurumları Yönetmeliği konusunda uzman, teknik ve resmi bir asistansın.
-                
-                Kritik Kurallar:
-                1. SADECE sana verilen 'Bağlam' içindeki bilgileri kullan. 
-                2. Eğer cevap bağlamda yoksa, 'Bu konuyla ilgili yönetmelikte net bir bilgi bulamadım' de. ASLA dış dünyadan bildiğin bilgileri ekleme.
-                3. Cevaplarını maddeler halinde ve resmi bir dille ver.
-                KARAR HİYERARŞİSİ:
-                - ÖZÜRSÜZ DEVAMSIZLIK: 10 günü aşan başarısız sayılır.
-                - SINIF GEÇME: Yıl sonu başarı puanı en az 50 OLMALI ve en fazla 3 zayıf bulunmalıdır.
-                4. Kişisel yorum yapma, veli veya okul müdürü gibi rolleri sınav katılımcılarıyla karıştırma.
-                """
-            },
-            {
-                "role": "user",
-                "content": f"Aşağıdaki yönetmelik metinlerine dayanarak soruyu yanıtla.\n\nBağlam:\n{baglam}\n\nSoru: {soru}"
-            }
-        ],
-        model="llama-3.1-8b-instant", 
-        temperature=0, # Kesin bilgi için 0 tutuyoruz
-        max_tokens=1000
-    )
+    system_prompt = f"""Sen MEB Ortaöğretim Kurumları Yönetmeliği konusunda uzmansın.
+Kritik Kurallar:
+1. SADECE 'Bağlam' içindeki bilgileri kullan.
+2. Cevap yoksa 'Yönetmelikte net bilgi bulamadım' de.
+3. Cevaplar maddeler halinde ve resmi olsun.
+4. "Evet" veya "Hayır" ile başla (uygunsa).
 
-    return chat_completion.choices[0].message.content
+Bağlam:
+{baglam}
+"""
 
-# 5. Sohbet Arayüzü
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": soru}
+            ],
+            model="llama-3.1-8b-instant",
+            temperature=0
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        return f"Hata: {str(e)}"
+
+# --- 5. CHAT ---
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Geçmiş mesajları göster
+# Eski mesajlar
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        st.write(message["content"])
 
-# Kullanıcı girişi
-if prompt := st.chat_input("Sınıf geçme şartları nedir?"):
+# Yeni mesaj
+if prompt := st.chat_input("Sorunuzu yazın..."):
+    
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.write(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Yönetmelik inceleniyor..."):
+        with st.spinner("Yönetmelik taranıyor..."):
             cevap = okul_asistani_sorgula(prompt)
-            st.markdown(cevap)
+            st.write(cevap)
             st.session_state.messages.append({"role": "assistant", "content": cevap})
+
+st.caption("⚠️ Bilgileri resmi kaynaklardan doğrulamayı unutmayın.")
