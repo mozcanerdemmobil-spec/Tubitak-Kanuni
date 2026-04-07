@@ -4,8 +4,8 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 # --- 1. SAYFA AYARLARI ---
-st.set_page_config(page_title="MEB Asistanı", page_icon="🎓", layout="wide")
-st.title("🎓 MEB Ortaöğretim Yönetmelik Asistanı")
+st.set_page_config(page_title="Okul Asistanı", page_icon="🎓", layout="wide")
+st.title("🎓 KANUNİ MTAL Okul Asistanı")
 
 # --- 2. VERİ YÜKLEME ---
 
