@@ -2,6 +2,8 @@
 
 Bu proje, KANUNİ MTAL öğrencileri için özel olarak geliştirilmiş bir yapay zeka botudur. Amacı, öğrencilerin ders programlarını, ders saat çizelgelerini ve sınıf bazlı bilgileri hızlı ve kolay bir şekilde sorgulamalarına yardımcı olmaktır.
 
+[![Uygulamayı Başlat](https://img.shields.io/badge/Yapay_Zeka-Asistanını_Çalıştır-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://tubitak-kanuni-ecamkr7x2uaxjyz5vrg7qm.streamlit.app/)
+
 ## 🏫 Öğrenci Asistanı
 
 Bu model, öğrenciler için daha arkadaş canlısı ve rehberlik odaklı olacak şekilde tasarlanmıştır. Kullanılan model, ders programı ve okul saat çizelgeleri ile eğitilmiş olup, sanki okuldan bir arkadaşınız gibi size doğru ve güncel bilgiyi sunar.
