@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import requests
+import base64
 from groq import Groq
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -19,19 +21,29 @@ def load_vector_db():
 
 @st.cache_data
 def program_yukle(istenen_sinif):
-    """Ders programını Excel'den yükler."""
     url = "https://raw.githubusercontent.com/mozcanerdemmobil-spec/Tubitak_llama/main/programlar.xlsx"
     try:
+        # Önce Excel dosyasını komple yükleyelim (sayfa isimlerini kontrol etmek için)
         excel_file = pd.ExcelFile(url, engine='openpyxl')
-        tum_sayfalar = excel_file.sheet_names
+        tum_sayfalar = excel_file.sheet_names # Excel'deki tüm sayfa isimlerini alır
         
-        hedef_sayfa = next((s for s in tum_sayfalar if s.lower().strip() == istenen_sinif.lower().strip()), None)
+        # Kullanıcının aradığı sınıfı, Excel'deki sayfalarla karşılaştıralım
+        # (Hem kullanıcı girdisini hem sayfa isimlerini küçük harfe çevirip boşlukları siliyoruz)
+        hedef_sayfa = None
+        for sayfa in tum_sayfalar:
+            if sayfa.lower().strip() == istenen_sinif.lower().strip():
+                hedef_sayfa = sayfa
+                break
+        
         if hedef_sayfa:
+            # Eşleşen sayfayı oku
             df = pd.read_excel(url, sheet_name=hedef_sayfa, engine='openpyxl')
             return df
         else:
-            st.warning(f"Excel içindeki sayfalar: {tum_sayfalar}")
+            # Debug için: Hangi sayfalar var ekrana yazdıralım (Hata çözülünce bu satırı silebilirsin)
+            st.warning(f"Excel içindeki gerçek sayfalar: {tum_sayfalar}")
             return None
+            
     except Exception as e:
         st.error(f"Excel okuma hatası: {e}")
         return None
@@ -40,61 +52,36 @@ def program_yukle(istenen_sinif):
 with st.sidebar:
     st.header("⚙️ Ayarlar")
     api_key = st.text_input("Groq API Key", type="password").strip()
+    
+    
+
     if not api_key:
         st.warning("Lütfen devam etmek için API Key giriniz.")
         st.stop()
 
-# --- 4. NESNELER ---
+# Gerekli nesneleri başlatıyoruz
 client = Groq(api_key=api_key)
 vector_db = load_vector_db()
 
-# --- 5. YÖNETMELİK SORGULAMA ---
+# --- 4. SORGULAMA FONKSİYONU (LLM) ---
 def okul_asistani_sorgula(soru):
     docs = vector_db.similarity_search(soru, k=5)
     baglam = "\n\n".join([doc.page_content for doc in docs])
 
     system_prompt = f"""Sen MEB Ortaöğretim Kurumları Yönetmeliği konusunda uzmansın.
-Kritik Kurallar:
-1. SADECE 'Bağlam' içindeki bilgileri kullan.
-2. Cevap yoksa 'Yönetmelikte net bilgi bulamadım' de.
-3. Cevaplar maddeler halinde ve resmi olsun.
-4. Genel Bilgiler:
-    -Ders Saati Süresi Okulda 40 dakika , işletmelerde 60 dakikadır
-    -Ders Yılı Tanımı Derslerin başladığı tarihten kesildiği tarihe kadar olan süredir.
-    -Eğitim ve Öğretim Yılı Ders yılının başladığı tarihten ertesi ders yılının başladığı tarihe kadar olan süredir.
-5. Kayıt ve Geçiş:
-    -Yaş Sınırı Kayıt günü itibarıyla 18 yaşını bitirmemiş olmak gerekir.
-    -Evlilik Durumu Evli olanların kaydı yapılmaz; öğrenciyken evlenenlerin kaydı Açık Lise'ye aktarılır.
-    -Hazırlıkta Başarısızlık Üst üste iki yıl başarısız olan öğrenci, hazırlık sınıfı olmayan bir okulun 9. sınıfına nakledilir.
-6. Devamsızlık:
-    -Özürsüz Sınırı Özürsüz 10 günü geçen öğrenci başarısız sayılır.
-    -Toplam Sınır Özürlü ve özürsüz toplam devamsızlık 30 günü aşamaz.
-    -60 Günlük İstisna Organ nakli, ağır hastalık veya tutukluluk gibi hallerde toplam sınır 60 gündür.
-    -Geç Gelme Sadece birinci ders saati için geçerlidir; sonrası devamsızlıktan sayılır.
-7. Sınıf Geçme:
-    -Yazılı Sınav Sayısı Haftalık ders saatinden bağımsız olarak her dersten en az 2 yazılı yapılır.
-    -Başarı Puanı Bir dersten başarılı sayılmak için yılsonu puanının en az 50 olması gerekir.
-    -Sorumlu Geçme Bir sınıfta en fazla 3 dersten başarısız olanlar sorumlu geçer.
-    -Sınıf Tekrarı Toplam başarısız ders sayısı 6'yı geçerse öğrenci sınıf tekrar eder.
-    -Beceri Sınavı Puanın %80'i sınavdan, %20'si iş dosyasından gelir
-8. Nakil İşlemleri:
-    -Başvuru Zamanı Aralık ve Mayıs ayları hariç her ayın ilk iş günü başvurulabilir.
-    -Ders Seçimi (9.Sınıf) Yeni başlayanlar için ders seçimi ders yılının ilk haftasında yapılır.
-9. Disiplin ve Ödül:
-    -Disiplin Cezaları Kınama, kısa süreli uzaklaştırma, okul değiştirme, örgün eğitim dışına çıkarma.
-    -Kopya ve Sigara Kopya çekmek veya tütün mamulü kullanmak "Kınama" cezası gerektirir.
-    -Teşekkür Belgesi Ağırlıklı ortalaması 70,00 - 84,99 arası olanlara verilir
-    -Takdir Belgesi Ağırlıklı ortalaması 85,00 ve üzeri olanlara verilir.
+    Kritik Kurallar:
+    1. SADECE 'Bağlam' içindeki bilgileri kullan.
+    2. Cevap yoksa 'Yönetmelikte net bilgi bulamadım' de.
+    3. Cevaplar maddeler halinde ve resmi olsun.
+    4. "Evet" veya "Hayır" ile başla (uygunsa).
+    5. Cevap formatı:
+       Cevap:
+       - ...
 
+    Bağlam:
+    {baglam}
+    """
 
-
-
-
-
-
-Bağlam:
-{baglam}
-"""
     try:
         chat_completion = client.chat.completions.create(
             messages=[
@@ -108,62 +95,53 @@ Bağlam:
     except Exception as e:
         return f"Hata: {str(e)}"
 
-# --- 6. CHAT ARAYÜZÜ ---
+# --- 5. CHAT ARAYÜZÜ VE MANTIK ---
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Eski mesajları göster
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
+# Yeni girdi kontrolü
 if prompt := st.chat_input("Sorunuzu buraya yazın (Örn: 12a programı nedir?)..."):
-
+    
+    # Kullanıcı mesajını göster ve kaydet
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.write(prompt)
 
-    # --- Ders Programı Kontrolü ---
+    # DERS PROGRAMI YAKALAMA (INTERCEPT)
     kucuk_prompt = prompt.lower()
     istenen_sinif = None
-    sinif_listesi = ["9a", "10a", "11a", "12a"]
-
+    sinif_listesi = ["9a", "10a", "11a", "12a"] # Excel sheet isimlerinle aynı olmalı
+    
+    # Eğer mesajda "program" veya "ders" geçiyorsa sınıfı ara
     if "program" in kucuk_prompt or "ders" in kucuk_prompt:
         for s in sinif_listesi:
             if s in kucuk_prompt:
                 istenen_sinif = s
                 break
 
-    # --- Ders Programı Sorulursa (Tablo gösterilmez, AI’ya prompt olarak verilir)
+    # EĞER DERS PROGRAMI SORULDUYSA
     if istenen_sinif:
         with st.chat_message("assistant"):
-            with st.spinner(f"{istenen_sinif.upper()} programı analiz ediliyor..."):
+            with st.spinner(f"{istenen_sinif.upper()} programı yükleniyor..."):
                 df_program = program_yukle(istenen_sinif)
+                
                 if df_program is not None:
-                    # Tabloyu string hâline getir
-                    program_text = df_program.to_string(index=False)
-                    ai_prompt = f"""
-Aşağıda kullanıcının {istenen_sinif.upper()} sınıfı için ders programı bulunmaktadır:
-
-{program_text}
-
-Kullanıcının sorusu: {prompt}
-
-Lütfen bu programa göre öneri ve yorum yap, cevabı maddeler halinde ver.
-"""
-                    chat_completion = client.chat.completions.create(
-                        messages=[{"role": "user", "content": ai_prompt}],
-                        model="llama-3.1-8b-instant",
-                        temperature=0
-                    )
-                    cevap = chat_completion.choices[0].message.content
-                    st.markdown(cevap)
-                    st.session_state.messages.append({"role": "assistant", "content": cevap})
+                    cevap_metni = f"İşte **{istenen_sinif.upper()}** sınıfının haftalık ders programı:"
+                    st.write(cevap_metni)
+                    st.table(df_program) # Tabloyu basar
+                    st.session_state.messages.append({"role": "assistant", "content": cevap_metni})
                 else:
                     hata_mesaji = f"Üzgünüm, Excel dosyasında '{istenen_sinif}' isimli bir sayfa bulamadım."
                     st.error(hata_mesaji)
                     st.session_state.messages.append({"role": "assistant", "content": hata_mesaji})
-
-    # --- Normal Yönetmelik Sorusu ---
+    
+    # NORMAL YÖNETMELİK SORUSU (Program sorulmadıysa)
     else:
         with st.chat_message("assistant"):
             with st.spinner("Yönetmelik taranıyor..."):
