@@ -52,7 +52,6 @@ Kritik Kurallar:
     -10.Ders: 15:35 - 16:25
 6. şunu ve benzeri terimleri kullanmak yerine: "1.0" şunu kullan "1." mesela öğrenci "1. ders" saatini sorduğunda vb.
 7. Kullanıcı tam adları kullanmayabilir örneğin sana şunu yazarlarsa "9-A" vb. şundan bahsediyorlardır: "9-A/BL"
-8.. Kullanıcı tire ("") kullanmak zorunda değil, senin odağın anahtar kelimeler olmalı anahtar kelimeler ise Şube isimleri (ör: 9-A) veya Öğretmen isimleri (ör: Oya)
 
 
 
