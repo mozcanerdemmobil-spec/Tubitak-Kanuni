@@ -26,58 +26,69 @@ with st.sidebar:
 client = Groq(api_key=api_key)
 vector_db = load_vector_db()
 
-# ====================== SINIF FİLTRESİ TESPİTİ ======================
-# Tüm olası sınıf varyasyonlarını yakalayan regex
-sinif_pattern = re.compile(
-    r'\b(9[abcdefghi]?|10[abcde]?|11[abcd]?|12[abfg]?)(?:[ -/]?(?:bl|el|en|hb|atp))?\b',
-    re.IGNORECASE
-)
-
+# ====================== YENİ SINIF TESPİT FONKSİYONU ======================
 def sinif_filtresi_bul(prompt: str):
-    """Prompt'tan sınıf kodunu tespit eder ve veritabanı için temiz format döndürür"""
-    bulunan = sinif_pattern.search(prompt)
-    if not bulunan:
+    """Prompt'tan sınıfı tespit eder ve olası tüm formatlarda dener"""
+    # Tüm olası sınıf kodlarını yakala (9a, 9-A, 9A/BL, 10d hb, 9atp vs.)
+    pattern = re.compile(r'\b(9[0-9a-z]?|10[0-9a-z]?|11[0-9a-z]?|12[0-9a-z]?)[ -/]?[a-z]*(?:bl|el|en|hb|atp)?\b', re.IGNORECASE)
+    match = pattern.search(prompt)
+    if not match:
         return None
     
-    sinif = bulunan.group(0).strip().upper()
+    raw = match.group(0).strip().upper()
     
-    # Temizleme: 9A BL → 9-A/BL , 9atp → 9-ATP , 10d hb → 10-D/HB gibi
-    sinif = re.sub(r'([0-9]+)([A-Z])', r'\1-\2', sinif)      # 9A → 9-A
-    sinif = re.sub(r'\s+', '', sinif)                        # boşlukları kaldır
-    sinif = re.sub(r'[-/]?BL', '/BL', sinif, flags=re.I)
-    sinif = re.sub(r'[-/]?EL', '/EL', sinif, flags=re.I)
-    sinif = re.sub(r'[-/]?EN', '/EN', sinif, flags=re.I)
-    sinif = re.sub(r'[-/]?HB', '/HB', sinif, flags=re.I)
-    sinif = re.sub(r'[-/]?ATP', '/ATP', sinif, flags=re.I)  # veya -ATP
+    # Olası formatlar (veritabanında hangisi varsa biri tutsun)
+    candidates = [
+        raw,                    # 9-A/BL
+        raw.replace(" ", ""),   # 9A/BL
+        re.sub(r'[-/]?BL', '/BL', raw),
+        re.sub(r'[-/]?EL', '/EL', raw),
+        re.sub(r'[-/]?EN', '/EN', raw),
+        re.sub(r'[-/]?HB', '/HB', raw),
+        re.sub(r'[-/]?ATP', '/ATP', raw),
+        raw.replace("-", ""),   # 9A/BL
+        raw.replace("/", ""),   # 9ABL
+    ]
     
-    return sinif
+    # Tekrarları temizle
+    candidates = list(dict.fromkeys(candidates))
+    return candidates  # Birden fazla format deneriz
 
-# --- 4. SORGULAMA FONKSİYONU (Yeni Mantık) ---
+# --- 4. SORGULAMA FONKSİYONU ---
 def okul_asistani_sorgula(soru: str):
-    # Sınıf filtresi var mı diye kontrol et
-    sinif_filtresi = sinif_filtresi_bul(soru)
+    sinif_candidates = sinif_filtresi_bul(soru)
     
-    print(f"🔍 Sorgu: {soru}")                    # debug için (istediğinde kaldırabilirsin)
-    if sinif_filtresi:
-        print(f"📌 Tespit edilen sınıf filtresi: {sinif_filtresi}")
+    print(f"🔍 Sorgu: {soru}")
+    if sinif_candidates:
+        print(f"📌 Tespit edilen sınıf adayları: {sinif_candidates}")
     
-    # Filtre parametresi hazırla
-    search_kwargs = {}
-    if sinif_filtresi:
-        search_kwargs = {"filter": {"sinif": sinif_filtresi}}
+    # Önce filtreli arama deneriz
+    docs = []
+    if sinif_candidates:
+        for candidate in sinif_candidates:
+            try:
+                search_kwargs = {"filter": {"sinif": candidate}}
+                docs = vector_db.similarity_search(soru, k=6, **search_kwargs)
+                if docs:
+                    print(f"✅ Filtre başarılı! Kullanılan sınıf: {candidate} ({len(docs)} sonuç)")
+                    break
+            except Exception as e:
+                print(f"Filtre hatası ({candidate}): {e}")
     
-    # Vektör DB'de arama (filtre uygulanmış haliyle)
-    docs = vector_db.similarity_search(soru, k=5, **search_kwargs)
+    # Eğer filtreyle hiç sonuç yoksa genel arama yap
+    if not docs:
+        print("⚠️ Filtreyle sonuç bulunamadı, genel arama yapılıyor...")
+        docs = vector_db.similarity_search(soru, k=5)
     
     baglam = "\n\n".join([doc.page_content for doc in docs])
 
-    system_prompt = f"""Sen MEB Ortaöğretim Kurumları Yönetmeliği konusunda uzmansın.
+    system_prompt = f"""Sen KANUNİ MTAL okulunun MEB Ortaöğretim Kurumları Yönetmeliği ve ders programı konusunda uzmansın.
 Kritik Kurallar:
-1. SADECE 'Bağlam' içindeki bilgileri kullan.
-2. Cevap yoksa 'Programda net bilgi bulamadım' de.
-3. Cevaplar maddeler halinde ve resmi olsun.
-4. "Evet" veya "Hayır" ile başla (uygunsa).
-5. Ders saatleri geneldir...
+1. SADECE aşağıda verilen 'Bağlam' içindeki bilgileri kullan.
+2. Eğer bağlamda ilgili sınıfın programı yoksa kesinlikle 'Programda net bilgi bulamadım' de.
+3. Cevaplar kısa, net ve maddeler halinde olsun.
+4. Ders saatleri her zaman aynıdır:
+   -1. Ders: 08:20-09:00   -2. Ders: 09:00-09:40   vs...
 
 Bağlam:
 {baglam}
@@ -94,9 +105,9 @@ Bağlam:
         )
         return chat_completion.choices[0].message.content
     except Exception as e:
-        return f"Hata: {str(e)}"
+        return f"Hata oluştu: {str(e)}"
 
-# --- 5. CHAT ARAYÜZÜ ---
+# --- 5. CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -104,14 +115,14 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-if prompt := st.chat_input("Sorunuzu yazın..."):
+if prompt := st.chat_input("Sorunuzu yazın... (Örn: 9-A/BL pazartesi 1. ders nedir?)"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     
     with st.chat_message("user"):
         st.write(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Yönetmelik ve sınıf bilgileri taranıyor..."):
+        with st.spinner("Sınıf programı taranıyor..."):
             cevap = okul_asistani_sorgula(prompt)
             st.write(cevap)
             st.session_state.messages.append({"role": "assistant", "content": cevap})
