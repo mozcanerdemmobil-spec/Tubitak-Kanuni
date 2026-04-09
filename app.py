@@ -12,7 +12,7 @@ st.title("🎓 KANUNİ MTAL Okul Asistanı")
 @st.cache_resource
 def load_vector_db():
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vector_db = Chroma(persist_directory="./okul_asistani_db_yeni", embedding_function=embeddings)
+    vector_db = Chroma(persist_directory="./okul_asistani_db_efe", embedding_function=embeddings)
     return vector_db
 
 # --- 3. SIDEBAR ---
