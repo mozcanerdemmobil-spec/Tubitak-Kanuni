@@ -50,8 +50,7 @@ Kritik Kurallar:
     -8.Ders: 14:05 - 14:45
     -9.Ders: 14:55 - 15:35
     -10.Ders: 15:35 - 16:25
-6. şunu ve benzeri terimleri kullanmak yerine: "1.0" şunu kullan "1." mesela öğrenci "1. ders" saatini sorduğunda vb.
-7. Kullanıcı tam adları kullanmayabilir örneğin sana şunu yazarlarsa "9-A" vb. şundan bahsediyorlardır: "9-A/BL"
+
 
 
 
